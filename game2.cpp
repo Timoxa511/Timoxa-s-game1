@@ -256,7 +256,7 @@ void FillingProc (Hero *object)
     if (object->FuelAmount < 100) object->FuelAmount += 1;
     }
 //--------------------------------------------------------------------
-void GamePhysics (Hero *object, double dt, Rect Square1, Rect Square2)
+void GamePhysics (Hero *object , double dt, Rect Square1, Rect Square2)
     {
 
     MidPower (object, Square1, Square2);
@@ -397,9 +397,6 @@ void StartCom ()
 
 //}
 //-----------------------------------------------------------------------------
-
-
-
 
 
 
