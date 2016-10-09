@@ -22,6 +22,12 @@ struct Fon
     int FonYLen;
     };
 
+struct Rect
+    {
+    int x0, y0;
+    int x1, y1;
+    };
+
 const int LOSE     = 0,
           WIN      = 2,
           CONTINUE = 1;
@@ -40,6 +46,7 @@ HDC SuperLoadImage (const char FilePictureName []);
 void Animation (Hero object, int Active);
 void FonDraw   (Fon object);
 void HeroDraw  (Hero object, int radius);
+void WindArea (Hero *object, double DeltaVX, double DeltaVY, Rect Square);
 
 void HitPointsDraw (double LifePoints, HDC HpTexture, int x, int y);
 int HitPoints      (COLORREF PointClr, COLORREF PrevClr, double *LifePoints);
@@ -76,6 +83,8 @@ void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik)
     Fon FrontFon = {1800/2, 1000/2, FrontFonTexture, 1800, 1000};
     Fon BackFon  = {1800/2, 1000/2, BackFonTexture,  1800, 1000};
     Hero LosharikHero = {900, 500, 0, 0, 110, 80, Losharik, 100};
+    Rect Square1 = {1050, 0, 1800, 500};
+    Rect Square2 = {0, 500, 300, 800};
 
     double LifePoints = 3;
 
@@ -104,6 +113,8 @@ void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik)
 
         Animation (LosharikHero, t/6%2);
 
+        WindArea (&LosharikHero, -0.2, 0.3, Square1);
+        WindArea (&LosharikHero, -0.2, 0.3, Square2);
 
         GamePhysics (&LosharikHero, 1);
         ObjectControl (&LosharikHero);
@@ -122,6 +133,19 @@ void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik)
         }
     }
 
+//-----------------------------------------------------------------------------
+void WindArea (Hero *object, double DeltaVX, double DeltaVY, Rect Square)
+    {
+    if ((Square.x0 <= object->x) && (object->x <= Square.x1) &&
+        (Square.y0 <= object->y) && (object->y <= Square.y1))
+        {
+        object->vx += DeltaVX;
+        object->vy += DeltaVY;
+        }
+
+
+
+    }
 //----------------------------------------------------------------------------
 void HitPointsDraw (double LifePoints, HDC HpTexture, int x, int y)
         {
@@ -141,7 +165,8 @@ int HitPoints (COLORREF PointClr, COLORREF PrevClr, double *LifePoints)
     if (PointClr != MAP_ROAD) *LifePoints -= 0.01;
     if (*LifePoints < 0) *LifePoints = 0;
 
-    if (PointClr != PrevClr) *LifePoints -= 1;
+    if (PrevClr != -1)
+        if (PointClr != PrevClr) *LifePoints -= 1;
 
     if (*LifePoints <= 0) return 1;
 
