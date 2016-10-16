@@ -30,6 +30,8 @@ struct Hero
 
     HDC Texture;
 
+    int Type;
+
     double FuelAmount;
     int Life;
 
@@ -70,54 +72,58 @@ void StartCom ();
 HDC SuperLoadImage (const char FilePictureName []);
 
 
-void Animation    (Hero object, int Active);
-void FonDraw      (Fon object);
-void HeroDraw     (Hero object, int radius);
-bool InsideArea   (Hero object, Rect Square);
-bool ClrGreenTest (COLORREF object);
+void Animation      (const Hero *object, int Active);
+void SuperAnimation (const Hero *object, int Active);
+void FonDraw        (const Fon  *object);
+void HeroDraw       (const Hero *object, int radius);
+bool InsideSquareArea   (const Hero *object, const Rect *Square);
+bool ClrGreenTest (const COLORREF *Clr);
 
 
 void FillingProc   (Hero *object);
-void HitPointsDraw (Hero  object, int x, int y);
+void HitPointsDraw (Hero object, int x, int y);
 int HitPoints      (Hero *object, COLORREF PointClr, COLORREF PrevClr);
-void GamePhysics   (Hero *object, double dt, Rect Square1, Rect Square2);
+void GamePhysics   (Hero *object, double dt, const Rect *Square1 = NULL, const Rect *Square2 = NULL);
 void ObjectControl (Hero *object,
                     int KeyUp = 'W', int KeyDown = 'S', int KeyLeft = 'A', int KeyRight = 'D',
                     int KeyStopMove = VK_SPACE);
 
 bool ClrCenter (Hero *object, COLORREF PointClr, COLORREF PrevClr);
 
-void MidPower  (Hero *object, Rect Square1, Rect Square2);
+void MidPower  (Hero *object, const Rect *Square1, const Rect *Square2);
 
-void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik);
+void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik, HDC SharpBird);
 
 int main()
     {
     StartCom ();
 
-
+    HDC  SharpBird       = SuperLoadImage ("SharpBird.bmp");
     HDC  Losharik        = SuperLoadImage ("Sharik.bmp");
     HDC  FrontFonTexture = SuperLoadImage ("GameFon.bmp");
     HDC  BackFonTexture  = SuperLoadImage ("GameBackFon.bmp");
 
-    GameProcces (FrontFonTexture, BackFonTexture,Losharik);
+    GameProcces (FrontFonTexture, BackFonTexture, Losharik, SharpBird);
 
     txDeleteDC (FrontFonTexture);
     txDeleteDC (Losharik);
     txDeleteDC (BackFonTexture);
+    txDeleteDC (SharpBird);
 
     txEnd ();
     }
 
 
 //-----------------------------------------------------------------------------
-void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik)
+void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik, HDC SharpBird)
     {
     Fon FrontFon = {{1800/2, 1000/2}, FrontFonTexture, 1800, 1000};
     Fon BackFon  = {{1800/2, 1000/2}, BackFonTexture,  1800, 1000};
-    Hero LosharikHero = {{900, 500}, {0, 0}, 110, 80, Losharik, 100, LIFE};
+    Hero SharpBirdHero = {{500, 700}, {0, 0}, 114, 85, SharpBird, 0};
+    Hero LosharikHero = {{900, 500},  {0, 0}, 110,  80, Losharik, 1, 100, LIFE};
     Rect Square1 = {{1050, 0}, {1800, 500}};
     Rect Square2 = {{0, 500}, {300, 800}};
+
 
     COLORREF PrevClr = -1;
     int Time1 = GetTickCount ();
@@ -127,20 +133,21 @@ void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik)
         {
 
         txLock ();
-        FonDraw (BackFon);
+        FonDraw (&BackFon);
         COLORREF PointClr = txGetPixel (LosharikHero.pos.x, LosharikHero.pos.y);
-        FonDraw (FrontFon);
+        FonDraw (&FrontFon);
         txUnlock ();
 
 
-        GamePhysics (&LosharikHero, DT, Square1, Square2);
+        GamePhysics (&LosharikHero, DT, &Square1, &Square2);
+        Animation (&LosharikHero, t/6%2);
 
-        //printf ("                                        гелий %lg      \r", LosharikHero.FuelAmount);
-
-        Animation (LosharikHero, t/6%2);
+        GamePhysics (&SharpBirdHero, DT, NULL, NULL);
+        SuperAnimation (&SharpBirdHero, t/3%3);
 
         if (ClrCenter (&LosharikHero, PointClr, PrevClr) == false) break;
 
+        //printf ("                                        гелий %lg      \r", LosharikHero.FuelAmount);
         //if (HitPoints (&LosharikHero, PointClr, PrevClr) == 1) break;
         //HitPointsDraw (LosharikHero, 100, 100);
         //FillingCenter (*LosharikHero, Life)
@@ -162,30 +169,35 @@ bool ClrCenter (Hero *object, COLORREF PointClr, COLORREF PrevClr)
     if (HitPoints (object, PointClr, PrevClr) == 1) return false;
     HitPointsDraw (*object, 100, 100);
 
-    if (ClrGreenTest (PointClr) == true && PointClr != MAP_ROAD) FillingProc (object);
+    if (ClrGreenTest (&PointClr) == true && PointClr != MAP_ROAD) FillingProc (object);
 
     return true;
     }
 //-----------------------------------------------------------------------------
-void MidPower (Hero *object, Rect Square1, Rect Square2)
+void MidPower (Hero *object, const Rect *Square1, const Rect *Square2)
     {
     Vector resF = {0, 0};
 
-    resF.x += -0.3;
-    resF.y +=  0.2;
-
-
-
-
-
-    if (InsideArea (*object, Square1)  ||
-        InsideArea (*object, Square2))
+    if (object->Type != 0)
         {
-        resF.x += -0.2;
-        resF.y +=  0.3;
+        resF.x += -0.3;
+        resF.y +=  0.2;
         }
+    /*if (object->Type == 0)
+        {
+        resF.x +=    1;
+        resF.y += -0.7;
+        } */
 
-    ObjectControl (object);
+    if (object->Type != 0)
+        if (Square1 != NULL && Square2 != NULL)  // if (Square1 && Square2) если имеет смысл
+            if (InsideSquareArea (object, Square1)  ||
+                InsideSquareArea (object, Square2))
+                {
+                resF.x += -0.2;
+                resF.y +=  0.3;
+                }
+    if (object->Type != 0) ObjectControl (object);
 
 
 
@@ -207,7 +219,7 @@ void HitPointsDraw (Hero object, int x, int y)
         while (object.Life > 0)
             {
             Fon LifeBallon = {x + object.Life*110.0, (double) y, object.Texture, 110, 80};
-            FonDraw (LifeBallon);
+            FonDraw (&LifeBallon);
             object.Life --;
 
             if ((x + object.Life*110.0) > 1800) y += 120;
@@ -218,8 +230,8 @@ void HitPointsDraw (Hero object, int x, int y)
 
 int HitPoints (Hero *object, COLORREF PointClr, COLORREF PrevClr)
     {
-    if (ClrGreenTest (PointClr) == false &&
-        ClrGreenTest (PointClr) != ClrGreenTest (PrevClr) &&
+    if (ClrGreenTest (&PointClr) == false &&
+        ClrGreenTest (&PointClr) != ClrGreenTest (&PrevClr) &&
         PrevClr != (COLORREF) -1 )                             // мы вошли в зону
 
         {
@@ -228,12 +240,13 @@ int HitPoints (Hero *object, COLORREF PointClr, COLORREF PrevClr)
         printf ("PointClr 0x%06X PrevClr 0x%06X \n", PointClr, PrevClr);
 
         }
-    /* мы впервые вошли в зону - отн€ть 1 хп и замерить врем€ вхождени€ в зону
+    /*  объ€снение действий
+    мы впервые вошли в зону - отн€ть 1 хп и замерить врем€ вхождени€ в зону
 
        мы уже находимс€ в зоне - замерить текущее врем€ и проверить
                 если разница двух времен больше 4 секунд, то -1 хп         */
 
-    if (ClrGreenTest (PointClr) == false)
+    if (ClrGreenTest (&PointClr) == false)
         {
         if (GetTickCount () - object->Time >= 2000)
             {
@@ -256,7 +269,7 @@ void FillingProc (Hero *object)
     if (object->FuelAmount < 100) object->FuelAmount += 1;
     }
 //--------------------------------------------------------------------
-void GamePhysics (Hero *object , double dt, Rect Square1, Rect Square2)
+void GamePhysics (Hero *object , double dt, const Rect *Square1, const Rect *Square2)
     {
 
     MidPower (object, Square1, Square2);
@@ -325,9 +338,9 @@ void ObjectControl (Hero *object, int KeyUp, int KeyDown, int KeyLeft, int KeyRi
         object->v.x = object->v.y = 0;
     }
 //-----------------------------------------------------------------------------
-bool ClrGreenTest (COLORREF Clr)
+bool ClrGreenTest (const COLORREF *Clr)
     {
-    COLORREF AmountOfGreenInColor = txExtractColor (Clr, TX_GREEN);
+    COLORREF AmountOfGreenInColor = txExtractColor (*Clr, TX_GREEN);
     return (AmountOfGreenInColor == 255);
     }
 
@@ -335,37 +348,47 @@ bool ClrGreenTest (COLORREF Clr)
 //-----------------------------------------------------------------------------
 //{  slaves
 
-void Animation (Hero object, int Active)
+void Animation (const Hero *object, int Active)
     {
     int ActiveMirror = 0;
-    //if (object.vx >= 0) ActiveMirror = 1; else ActiveMirror = 0;
+    //if (object.v.x >= 0) ActiveMirror = 1; else ActiveMirror = 0;
 
-    txTransparentBlt (txDC (), object.pos.x - object.XLen/2, object.pos.y - object.YLen/2,
-                      object.XLen, object.YLen, object.Texture,
-                      object.XLen * Active, object.YLen * ActiveMirror, RGB (0, 0, 0));
+    txTransparentBlt (txDC (), object->pos.x - object->XLen/2, object->pos.y - object->YLen/2,
+                      object->XLen, object->YLen, object->Texture,
+                      object->XLen * Active, object->YLen * ActiveMirror, RGB (0, 0, 0));
+    }
+//-----------------------------------------------------------------------------
+void SuperAnimation (const Hero *object, int Active)
+    {
+    int ActiveMirror = 0;
+    if (object->v.x >= 0) ActiveMirror = 1; else ActiveMirror = 0;
+
+    txAlphaBlend (txDC (), object->pos.x - object->XLen/2, object->pos.y - object->YLen/2,
+                      object->XLen, object->YLen, object->Texture,
+                      object->XLen * Active, object->YLen * ActiveMirror);
     }
 //-----------------------------------------------------------------------------
 
-void HeroDraw (Hero object, int radius)
+void HeroDraw (const Hero *object, int radius)
     {
     txSetFillColor (TX_GREEN);
-    txCircle (object.pos.x, object.pos.y, radius);
-    txTransparentBlt (txDC (), object.pos.x - object.XLen/2, object.pos.y - object.YLen/2, object.XLen, object.YLen,
-                      object.Texture, 0, 0, RGB (0, 0, 0));
+    txCircle (object->pos.x, object->pos.y, radius);
+    txTransparentBlt (txDC (), object->pos.x - object->XLen/2, object->pos.y - object->YLen/2, object->XLen, object->YLen,
+                      object->Texture, 0, 0, RGB (0, 0, 0));
     }
 //-----------------------------------------------------------------------------
 
-void FonDraw (Fon object)
+void FonDraw (const Fon *object)
     {
-    txTransparentBlt (txDC (), object.pos.x - object.FonXLen/2, object.pos.y - object.FonYLen/2, object.FonXLen, object.FonYLen,
-                      object.Texture, 0, 0, RGB (0, 0, 0));
+    txTransparentBlt (txDC (), object->pos.x - object->FonXLen/2, object->pos.y - object->FonYLen/2, object->FonXLen, object->FonYLen,
+                      object->Texture, 0, 0, RGB (0, 0, 0));
     }
 
 //-----------------------------------------------------------------------------
-bool InsideArea (Hero object, Rect Square)
+bool InsideSquareArea (const Hero *object, const Rect *Square)
     {
-    return ((Square.A.x <= object.pos.x) && (object.pos.x <= Square.B.x) &&
-            (Square.A.y <= object.pos.y) && (object.pos.y <= Square.B.y));
+    return ((Square->A.x <= object->pos.x) && (object->pos.x <= Square->B.x) &&
+            (Square->A.y <= object->pos.y) && (object->pos.y <= Square->B.y));
     }
 //-----------------------------------------------------------------------------
 
