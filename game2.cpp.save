@@ -1,18 +1,5 @@
 
 
-
-
-//TODO сделать функцию ColorAnalysis :
-//TODO надо что бы она решала какую изменяющую функцию вызывать :
-//TODO добавить/отнять  топливо/хп
-//TODO если поменялся цвет(кол-во зеленого в цвете или цвет не равен дороге или цвет поменялся и не равен дороге…)
-//TODO что бы все функции игровой логики(зависящие от цвета карты) вызывались в ней
-//TODO txAlphaBlend
-//TODO txLib установить
-
-
-
-
 #include "TXlib.h"
 
 
@@ -29,13 +16,13 @@ struct Hero
     int YLen;
 
     HDC Texture;
-int Type;
+
+    int Type;
+
     double FuelAmount;
     int Life;
 
     int Time;
-
-    
     };
 
 struct Fon
@@ -54,9 +41,7 @@ struct Rect
 
 
 
-const int LOSE     = 0,
-          WIN      = 2,
-          CONTINUE = 1;
+enum {LOSE, WIN, CONTINUE};
 
 const COLORREF MAP_ROAD         = RGB (  0, 255, 0);
 
@@ -64,8 +49,11 @@ const COLORREF MAP_FILLINGPOINT = RGB (255, 255, 0);
 
 const double DT = 1;
 
-const int LIFE  = 3;
+const int LIFE  = 20;
 
+const int FlockSize = 11;
+
+enum {NPC, CHARACTER};
 
 void Talk (int x, int y, const char words [], int sleep = 1000);
 void StartCom ();
@@ -80,9 +68,11 @@ bool InsideSquareArea   (const Hero *object, const Rect *Square);
 bool ClrGreenTest (const COLORREF *Clr);
 
 
+void CreateFlock (Hero SharpBirdHero [], int Size);
+void FlockMove   (Hero SharpBirdHero [], int Size, int t);
 void FillingProc   (Hero *object);
 void HitPointsDraw (Hero object, int x, int y);
-int HitPoints      (Hero *object, COLORREF PointClr, COLORREF PrevClr);
+int  HitPoints     (Hero *object, COLORREF PointClr, COLORREF PrevClr);
 void GamePhysics   (Hero *object, double dt, const Rect *Square1 = NULL, const Rect *Square2 = NULL);
 void ObjectControl (Hero *object,
                     int KeyUp = 'W', int KeyDown = 'S', int KeyLeft = 'A', int KeyRight = 'D',
@@ -117,13 +107,26 @@ int main()
 //-----------------------------------------------------------------------------
 void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik, HDC SharpBird)
     {
-    Fon FrontFon = {{1800/2, 1000/2}, FrontFonTexture, 1800, 1000};
-    Fon BackFon  = {{1800/2, 1000/2}, BackFonTexture,  1800, 1000};
-    Hero SharpBirdHero = {{500, 700}, {0, 0}, 114, 85, SharpBird};
-    Hero LosharikHero = {{900, 500},  {0, 0}, 110,  80, Losharik, 100, LIFE};
     Rect Square1 = {{1050, 0}, {1800, 500}};
     Rect Square2 = {{0, 500}, {300, 800}};
 
+    Fon FrontFon = {{1800/2, 1000/2}, FrontFonTexture, 1800, 1000};
+    Fon BackFon  = {{1800/2, 1000/2}, BackFonTexture,  1800, 1000};
+
+    Hero LosharikHero = {{900, 850},  {0, 0}, 110,  80, Losharik, 1, 100, LIFE};
+
+    Hero SharpBirdHero[FlockSize] = { {{500, 400}, {5, -1.5}, 114, 85, SharpBird, 0} };
+    CreateFlock (SharpBirdHero, FlockSize);
+    /* for ()
+    #define ever (;;)
+    for ever    #joke
+    for (int i = 1; i < 10; i++)
+        SharpBirdHero [i] = SharpBirdHero [0];
+    */
+
+
+// если написать в колве [666666666] то если живой человек выиграет 100к миллиардов в лотерее и зайдет к нам в офис,
+//то он получит сумму (его убьют если суммы нету)
 
     COLORREF PrevClr = -1;
     int Time1 = GetTickCount ();
@@ -142,15 +145,12 @@ void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik, HDC Sha
         GamePhysics (&LosharikHero, DT, &Square1, &Square2);
         Animation (&LosharikHero, t/6%2);
 
-        GamePhysics (&SharpBirdHero, DT, NULL, NULL);
-        SuperAnimation (&SharpBirdHero, t/3%3);
+
+        FlockMove   (SharpBirdHero, FlockSize, t);
 
         if (ClrCenter (&LosharikHero, PointClr, PrevClr) == false) break;
 
         //printf ("                                        гелий %lg      \r", LosharikHero.FuelAmount);
-        //if (HitPoints (&LosharikHero, PointClr, PrevClr) == 1) break;
-        //HitPointsDraw (LosharikHero, 100, 100);
-        //FillingCenter (*LosharikHero, Life)
 
         PrevClr = PointClr;
 
@@ -174,23 +174,24 @@ bool ClrCenter (Hero *object, COLORREF PointClr, COLORREF PrevClr)
     return true;
     }
 //-----------------------------------------------------------------------------
-void MidPower (Hero *object, const Rect *Square1, const Rect *Square2)
+void MidPower (Hero *object, const Rect *Square1, const Rect *Square2)        // Запомнить момент.Наследование СИ++ и виртуальные функции
     {
     Vector resF = {0, 0};
 
-    resF.x += -0.3;
-    resF.y +=  0.2;
+    if (object->Type != NPC)
+        {
+        resF.x += -0.3;
+        resF.y +=  0.2;
+        }
 
-
-
-
-    if (Square1 != NULL && Square2 != NULL)  // if (Square1 && Square2) если имеет смысл
-        if (InsideSquareArea (object, Square1)  ||
-            InsideSquareArea (object, Square2))
-            {
-            resF.x += -0.2;
-            resF.y +=  0.3;
-            }
+    if (object->Type != NPC)
+        if (Square1 != NULL && Square2 != NULL)  // if (Square1 && Square2) если имеет смысл
+            if (InsideSquareArea (object, Square1)  ||
+                InsideSquareArea (object, Square2))
+                {
+                resF.x += -0.2;
+                resF.y +=  0.3;
+                }
     if (object->Type != NPC) ObjectControl (object);
 
 
@@ -208,6 +209,39 @@ void MidPower (Hero *object, const Rect *Square1, const Rect *Square2)
 
     }
 //----------------------------------------------------------------------------
+void CreateFlock (Hero SharpBirdHero [], int Size)
+    {
+    for (int i = 1; i < Size; i++)
+        {
+        assert (0 <= i && i < Size);/*   проверка не создал ли я копий больше чем вмещается в массив, а если создал, ...
+                                         // то ошибка фатальна - последнюю копию программа вставит в переменные ниже/
+                                         (реже, а бывает и вообще в другие места) созданные undefined behavior*/
+
+        SharpBirdHero[i] = SharpBirdHero [0];
+
+
+        SharpBirdHero[i].pos.y += 50*i;
+
+        if (i < Size/2 + 1) SharpBirdHero[i].pos.x += 50*i;
+        else                SharpBirdHero[i].pos.x -= 50*(i - Size) + 40;
+
+        }
+
+    }
+
+//-----------------------------------------------------------------------------
+void FlockMove (Hero SharpBirdHero [], int Size, int t)
+    {
+    for (int i = 0; i < Size; i++)
+        {
+        assert (0 <= i && i < Size);
+        GamePhysics (&SharpBirdHero [i], DT, NULL, NULL);
+        SuperAnimation (&SharpBirdHero [i], t/3%3);
+        }
+    }
+
+//-----------------------------------------------------------------------------
+
 void HitPointsDraw (Hero object, int x, int y)
         {
         while (object.Life > 0)
@@ -216,8 +250,12 @@ void HitPointsDraw (Hero object, int x, int y)
             FonDraw (&LifeBallon);
             object.Life --;
 
-            if ((x + object.Life*110.0) > 1800) y += 120;
-            }
+            /*if ((x + object.Life*110.0) > 1800)
+                {
+                x -= object.Life*110.0;
+                y += 120;
+                }
+            }*/
 
         }
 //-----------------------------------------------------------------------------
@@ -231,8 +269,6 @@ int HitPoints (Hero *object, COLORREF PointClr, COLORREF PrevClr)
         {
         object->Life -= 1;
         object->Time = GetTickCount ();
-        printf ("PointClr 0x%06X PrevClr 0x%06X \n", PointClr, PrevClr);
-
         }
     /*  объяснение действий
     мы впервые вошли в зону - отнять 1 хп и замерить время вхождения в зону
@@ -246,7 +282,6 @@ int HitPoints (Hero *object, COLORREF PointClr, COLORREF PrevClr)
             {
             object->Life -= 1;
             object->Time = GetTickCount ();
-            printf ("*******************************************************************************************\n");
             }
         }
 
