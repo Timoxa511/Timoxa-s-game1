@@ -1,7 +1,9 @@
-
-
 #include "TXlib.h"
 
+
+
+
+//{    прототипы
 
 struct Vector
     {
@@ -10,6 +12,8 @@ struct Vector
 
 struct Hero
     {
+    bool Active;
+
     Vector pos;
     Vector v;
     int XLen;
@@ -18,11 +22,13 @@ struct Hero
     HDC Texture;
 
     int Type;
+    bool InFlock;
 
     double FuelAmount;
     int Life;
 
     int Time;
+
     };
 
 struct Fon
@@ -51,7 +57,7 @@ const double DT = 1;
 
 const int LIFE  = 20;
 
-const int FlockSize = 11;
+const int FlockSize = 22;
 
 enum {NPC, CHARACTER};
 
@@ -63,26 +69,34 @@ HDC SuperLoadImage (const char FilePictureName []);
 void Animation      (const Hero *object, int Active);
 void SuperAnimation (const Hero *object, int Active);
 void FonDraw        (const Fon  *object);
+double Gipotenooza  (double xA, double yA, double xB, double yB);
 void HeroDraw       (const Hero *object, int radius);
 bool InsideSquareArea   (const Hero *object, const Rect *Square);
 bool ClrGreenTest (const COLORREF *Clr);
 
 
-void CreateFlock (Hero SharpBirdHero [], int Size);
-void FlockMove   (Hero SharpBirdHero [], int Size, int t);
+void CreateFlock (Hero TheDucks [], int start, int end, Vector pos, Vector v);
+void FlockMove   (Hero TheDucks [], int Size, int t, Hero *LosharikHero);
+bool FlockLogic  (Hero object, Hero TheDucks [], int Size, double VarOfTheDistanceBetweenTheDuckAndTheHeroObject);
+bool IsInFlock        (Hero TheDucks [], int ArrayDucksNum, int ADuck);
+void IsInFlockWrapper (Hero TheDucks [], int ArrayDucksNum);
+
 void FillingProc   (Hero *object);
 void HitPointsDraw (Hero object, int x, int y);
 int  HitPoints     (Hero *object, COLORREF PointClr, COLORREF PrevClr);
-void GamePhysics   (Hero *object, double dt, const Rect *Square1 = NULL, const Rect *Square2 = NULL);
+void GamePhysics   (Hero *object, double dt, const Rect *Square1 = NULL, const Rect *Square2 = NULL, Hero *LosharikHero = NULL);
 void ObjectControl (Hero *object,
                     int KeyUp = 'W', int KeyDown = 'S', int KeyLeft = 'A', int KeyRight = 'D',
                     int KeyStopMove = VK_SPACE);
 
 bool ClrCenter (Hero *object, COLORREF PointClr, COLORREF PrevClr);
 
-void MidPower  (Hero *object, const Rect *Square1, const Rect *Square2);
+void MidPower        (Hero *object, const Rect *Square1, const Rect *Square2, Hero *LosharikHero);
+Vector AngryDuckMode (Hero *object, Hero *AngryDuck);
 
 void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik, HDC SharpBird);
+
+//}
 
 int main()
     {
@@ -103,7 +117,6 @@ int main()
     txEnd ();
     }
 
-
 //-----------------------------------------------------------------------------
 void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik, HDC SharpBird)
     {
@@ -113,23 +126,18 @@ void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik, HDC Sha
     Fon FrontFon = {{1800/2, 1000/2}, FrontFonTexture, 1800, 1000};
     Fon BackFon  = {{1800/2, 1000/2}, BackFonTexture,  1800, 1000};
 
-    Hero LosharikHero = {{900, 850},  {0, 0}, 110,  80, Losharik, 1, 100, LIFE};
+    Hero LosharikHero = {true, {900, 850},  {0, 0}, 110,  80, Losharik, CHARACTER, false, 100, LIFE};
 
-    Hero SharpBirdHero[FlockSize] = { {{500, 400}, {5, -1.5}, 114, 85, SharpBird, 0} };
-    CreateFlock (SharpBirdHero, FlockSize);
-    /* for ()
-    #define ever (;;)
-    for ever    #joke
-    for (int i = 1; i < 10; i++)
-        SharpBirdHero [i] = SharpBirdHero [0];
-    */
+    Hero TheDucks[FlockSize] = { {true, { }, { }, 114, 85, SharpBird, NPC} };
+    CreateFlock (TheDucks, 0,           FlockSize/2, {400, 400}, {5, -1.5});
+    CreateFlock (TheDucks, FlockSize/2, FlockSize,   {400, 400}, {3, 3.5 });
 
 
 // если написать в колве [666666666] то если живой человек выиграет 100к миллиардов в лотерее и зайдет к нам в офис,
 //то он получит сумму (его убьют если суммы нету)
 
     COLORREF PrevClr = -1;
-    int Time1 = GetTickCount ();
+    //int Time1 = GetTickCount ();
     int t = 0;
 
     while (!GetAsyncKeyState (VK_ESCAPE))
@@ -142,20 +150,22 @@ void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik, HDC Sha
         txUnlock ();
 
 
-        GamePhysics (&LosharikHero, DT, &Square1, &Square2);
+        GamePhysics (&LosharikHero, DT, &Square1, &Square2, &LosharikHero);
         Animation (&LosharikHero, t/6%2);
 
 
-        FlockMove   (SharpBirdHero, FlockSize, t);
+        FlockMove   (TheDucks, FlockSize, t, &LosharikHero);
+        if (FlockLogic (LosharikHero, TheDucks, FlockSize, 50) == false) LosharikHero.Life -=1;
+        IsInFlockWrapper (TheDucks, FlockSize);
+
+
+
 
         if (ClrCenter (&LosharikHero, PointClr, PrevClr) == false) break;
-
-        //printf ("                                        гелий %lg      \r", LosharikHero.FuelAmount);
-
         PrevClr = PointClr;
 
 
-        int Time2 = GetTickCount ();
+        //int Time2 = GetTickCount ();
         //printf ("         время %d        \r", Time2 - Time1);
 
         txSleep (20);
@@ -174,7 +184,7 @@ bool ClrCenter (Hero *object, COLORREF PointClr, COLORREF PrevClr)
     return true;
     }
 //-----------------------------------------------------------------------------
-void MidPower (Hero *object, const Rect *Square1, const Rect *Square2)        // Запомнить момент.Наследование СИ++ и виртуальные функции
+void MidPower (Hero *object, const Rect *Square1, const Rect *Square2, Hero *LosharikHero) // Запомнить момент. Наследование СИ++ и виртуальные функции
     {
     Vector resF = {0, 0};
 
@@ -195,6 +205,12 @@ void MidPower (Hero *object, const Rect *Square1, const Rect *Square2)        //
     if (object->Type != NPC) ObjectControl (object);
 
 
+    if (object->Type == NPC && !object->InFlock)
+        {
+        Vector promezshytochnoe_nazvanue = AngryDuckMode (LosharikHero, object);
+        resF.x += promezshytochnoe_nazvanue.x;
+        resF.y += promezshytochnoe_nazvanue.y;
+        }
 
     object->v.x += resF.x/1 * DT;       //m = 1
     object->v.y += resF.y/1 * DT;
@@ -206,41 +222,91 @@ void MidPower (Hero *object, const Rect *Square1, const Rect *Square2)        //
 
     if (object->v.y > +3.7) object->v.y = +3.7;
     if (object->v.y < -5.8) object->v.y = -5.8;
-
     }
-//----------------------------------------------------------------------------
-void CreateFlock (Hero SharpBirdHero [], int Size)
+
+//=============================================================================
+void CreateFlock (Hero TheDucks [], int start, int end, Vector pos, Vector v)
     {
-    for (int i = 1; i < Size; i++)
+
+    for (int i = start, n = 0; i < end; i++, n++)
         {
-        assert (0 <= i && i < Size);/*   проверка не создал ли я копий больше чем вмещается в массив, а если создал, ...
-                                         // то ошибка фатальна - последнюю копию программа вставит в переменные ниже/
+        assert (start <= i && i < end);                         /*   проверка не создал ли я копий больше чем вмещается в массив, а если создал, ...
+                                         то ошибка фатальна - последнюю копию программа вставит в переменные ниже/
                                          (реже, а бывает и вообще в другие места) созданные undefined behavior*/
 
-        SharpBirdHero[i] = SharpBirdHero [0];
+        TheDucks[i] = TheDucks [0];
+        TheDucks[i].pos = pos;
+        TheDucks[i].v = v;
 
+        TheDucks[i].pos.y += 50*n;
 
-        SharpBirdHero[i].pos.y += 50*i;
-
-        if (i < Size/2 + 1) SharpBirdHero[i].pos.x += 50*i;
-        else                SharpBirdHero[i].pos.x -= 50*(i - Size) + 40;
+        if (n < (end - start)/2) TheDucks[i].pos.x += 50*(n+1);
+        else                     TheDucks[i].pos.x -= 50*(n - (end - start));
 
         }
 
     }
 
 //-----------------------------------------------------------------------------
-void FlockMove (Hero SharpBirdHero [], int Size, int t)
+void FlockMove (Hero TheDucks [], int Size, int t, Hero *LosharikHero)
     {
     for (int i = 0; i < Size; i++)
         {
         assert (0 <= i && i < Size);
-        GamePhysics (&SharpBirdHero [i], DT, NULL, NULL);
-        SuperAnimation (&SharpBirdHero [i], t/3%3);
+        GamePhysics (&TheDucks [i], DT, NULL, NULL, LosharikHero);
+        if (TheDucks[i].Active) SuperAnimation (&TheDucks [i], t/3%3);
         }
     }
 
 //-----------------------------------------------------------------------------
+bool FlockLogic (Hero object, Hero TheDucks [], int Size, double VarOfTheDistanceBetweenTheDuckAndTheHeroObject)
+    {
+    for (int i = 0; i < Size; i++)
+        {
+        if (TheDucks[i].Active == false)
+            continue;
+
+        double result = Gipotenooza (object.pos.x, object.pos.y, TheDucks[i].pos.x, TheDucks[i].pos.y);
+
+        if (result <= VarOfTheDistanceBetweenTheDuckAndTheHeroObject)
+            {
+            TheDucks[i].Active = false;
+            return false;
+            }
+        }
+
+    return true;
+    }
+
+//-----------------------------------------------------------------------------
+bool IsInFlock (Hero TheDucks [], int ArrayDucksNum, int ADuck)
+    {
+    return true;
+    if (ADuck >= 1                   && TheDucks[ADuck - 1].Active) return true;
+    if (ADuck <= ArrayDucksNum-1 - 1 && TheDucks[ADuck + 1].Active) return true;
+
+    return false;
+    }
+
+//-----------------------------------------------------------------------------
+void IsInFlockWrapper (Hero TheDucks [], int ArrayDucksNum)
+    {
+    for (int ADuck = 0; ADuck < ArrayDucksNum; ADuck++)
+        {
+        TheDucks[ADuck].InFlock = IsInFlock (TheDucks, ArrayDucksNum, ADuck);
+        }
+
+    }
+
+//-----------------------------------------------------------------------------
+Vector AngryDuckMode (Hero *object, Hero *AngryDuck)
+    {
+    double VectorLength = Gipotenooza (object->pos.x, object->pos.y, AngryDuck->pos.x, AngryDuck->pos.y);
+    Vector ChasingForce = {(object->pos.x - AngryDuck->pos.x)/VectorLength * 100,
+                           (object->pos.y - AngryDuck->pos.y)/VectorLength * 100};
+    return ChasingForce;
+    }
+//=============================================================================
 
 void HitPointsDraw (Hero object, int x, int y)
         {
@@ -249,12 +315,13 @@ void HitPointsDraw (Hero object, int x, int y)
             Fon LifeBallon = {x + object.Life*110.0, (double) y, object.Texture, 110, 80};
             FonDraw (&LifeBallon);
             object.Life --;
-
-            if ((x + object.Life*110.0) > 1800)
+            }
+            /*if ((x + object.Life*110.0) > 1800)
                 {
                 x -= object.Life*110.0;
                 y += 120;
-            }   }
+                }
+            }*/
 
         }
 //-----------------------------------------------------------------------------
@@ -291,20 +358,21 @@ int HitPoints (Hero *object, COLORREF PointClr, COLORREF PrevClr)
     }
 
 //-----------------------------------------------------------------------------
+
 void FillingProc (Hero *object)
     {
     if (object->Life < LIFE) object->Life += 1;
     if (object->FuelAmount < 100) object->FuelAmount += 1;
     }
+
 //--------------------------------------------------------------------
-void GamePhysics (Hero *object , double dt, const Rect *Square1, const Rect *Square2)
+void GamePhysics (Hero *object , double dt, const Rect *Square1, const Rect *Square2, Hero *LosharikHero)
     {
 
-    MidPower (object, Square1, Square2);
+    MidPower (object, Square1, Square2, LosharikHero);
 
     object->pos.x += object->v.x * dt;
     object->pos.y += object->v.y * dt;
-
 
     if (object->pos.x > 1800)
         {
@@ -329,6 +397,7 @@ void GamePhysics (Hero *object , double dt, const Rect *Square1, const Rect *Squ
 
 
     }
+
 //-----------------------------------------------------------------------------
 void ObjectControl (Hero *object, int KeyUp, int KeyDown, int KeyLeft, int KeyRight, int KeyStopMove)
     {
@@ -365,6 +434,7 @@ void ObjectControl (Hero *object, int KeyUp, int KeyDown, int KeyLeft, int KeyRi
     if (GetAsyncKeyState ( KeyStopMove ))
         object->v.x = object->v.y = 0;
     }
+
 //-----------------------------------------------------------------------------
 bool ClrGreenTest (const COLORREF *Clr)
     {
@@ -433,6 +503,13 @@ HDC SuperLoadImage (const char FilePictureName [])
     return Load;
     }
 //-----------------------------------------------------------------------------
+
+double Gipotenooza (double xA, double yA, double xB, double yB)
+    {
+    return sqrt ( (xB - xA)*(xB - xA) + (yB - yA)*(yB - yA) );
+    }
+//-----------------------------------------------------------------------------
+
 void StartCom ()
     {
     txCreateWindow (1800, 1000);
@@ -448,6 +525,4 @@ void StartCom ()
 
 //}
 //-----------------------------------------------------------------------------
-
-
 
