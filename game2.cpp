@@ -55,13 +55,14 @@ const COLORREF MAP_FILLINGPOINT = RGB (255, 255, 0);
 
 const double DT = 1;
 
-const int LIFE  = 20;
+const int LIFE  = 1;
 
 const int FlockSize = 22;
 
 enum {NPC, CHARACTER};
 
 void Talk (int x, int y, const char words [], int sleep = 1000);
+void PlsStopSpammingKeysGetYourHandsAwayFromTheKeyBoard_Arrrrrrrr ();
 void StartCom ();
 HDC SuperLoadImage (const char FilePictureName []);
 
@@ -78,7 +79,7 @@ bool ClrGreenTest (const COLORREF *Clr);
 void CreateFlock (Hero TheDucks [], int start, int end, Vector pos, Vector v);
 void FlockMove   (Hero TheDucks [], int Size, int t, Hero *LosharikHero);
 bool FlockLogic  (Hero object, Hero TheDucks [], int Size, double VarOfTheDistanceBetweenTheDuckAndTheHeroObject);
-bool IsInFlock        (Hero TheDucks [], int ArrayDucksNum, int ADuck);
+bool IsInFlock        (Hero TheDucks [], int ArrayDucksNum, int ADuck, double DucksAttracttionToEachOther);
 void IsInFlockWrapper (Hero TheDucks [], int ArrayDucksNum);
 
 void FillingProc   (Hero *object);
@@ -115,6 +116,7 @@ int main()
     txDeleteDC (SharpBird);
 
     txEnd ();
+    PlsStopSpammingKeysGetYourHandsAwayFromTheKeyBoard_Arrrrrrrr ();
     }
 
 //-----------------------------------------------------------------------------
@@ -154,11 +156,10 @@ void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik, HDC Sha
         Animation (&LosharikHero, t/6%2);
 
 
-        FlockMove   (TheDucks, FlockSize, t, &LosharikHero);
+
         if (FlockLogic (LosharikHero, TheDucks, FlockSize, 50) == false) LosharikHero.Life -=1;
         IsInFlockWrapper (TheDucks, FlockSize);
-
-
+        FlockMove   (TheDucks, FlockSize, t, &LosharikHero);
 
 
         if (ClrCenter (&LosharikHero, PointClr, PrevClr) == false) break;
@@ -205,11 +206,18 @@ void MidPower (Hero *object, const Rect *Square1, const Rect *Square2, Hero *Los
     if (object->Type != NPC) ObjectControl (object);
 
 
+
+
     if (object->Type == NPC && !object->InFlock)
         {
         Vector promezshytochnoe_nazvanue = AngryDuckMode (LosharikHero, object);
         resF.x += promezshytochnoe_nazvanue.x;
         resF.y += promezshytochnoe_nazvanue.y;
+
+        /*txSetColor (TX_BLACK, 4);
+        if (object->Active)
+            txLine (object->pos.x, object->pos.y, object->pos.x + promezshytochnoe_nazvanue.x*100,
+             object->pos.y + promezshytochnoe_nazvanue.y*100);*/
         }
 
     object->v.x += resF.x/1 * DT;       //m = 1
@@ -254,7 +262,7 @@ void FlockMove (Hero TheDucks [], int Size, int t, Hero *LosharikHero)
         {
         assert (0 <= i && i < Size);
         GamePhysics (&TheDucks [i], DT, NULL, NULL, LosharikHero);
-        if (TheDucks[i].Active) SuperAnimation (&TheDucks [i], t/3%3);
+        if (TheDucks[i].Active) SuperAnimation (&TheDucks [i], t/3%3); //else txCircle (TheDucks[i].pos.x, TheDucks[i].pos.y, 2);
         }
     }
 
@@ -278,22 +286,38 @@ bool FlockLogic (Hero object, Hero TheDucks [], int Size, double VarOfTheDistanc
     return true;
     }
 
-//-----------------------------------------------------------------------------
-bool IsInFlock (Hero TheDucks [], int ArrayDucksNum, int ADuck)
+/*bool IsInFlockWorstSDFGHJKJVC_ploxo_otchen (Hero TheDucks [], int ArrayDucksNum, int ADuck)
     {
-    return true;
     if (ADuck >= 1                   && TheDucks[ADuck - 1].Active) return true;
     if (ADuck <= ArrayDucksNum-1 - 1 && TheDucks[ADuck + 1].Active) return true;
 
     return false;
-    }
+    }  */
 
+//-----------------------------------------------------------------------------
+bool IsInFlock (Hero TheDucks [], int ArrayDucksNum, int ADuck, double DucksAttracttionToEachOther)
+    {
+    for (int i = 0; i < ArrayDucksNum; i++)
+        {
+        if (i == ADuck || TheDucks[i].Active == false)
+            continue;
+
+        double Duck_sEyeZone = Gipotenooza (TheDucks[ADuck].pos.x, TheDucks[ADuck].pos.y,
+                                            TheDucks[i].pos.x,     TheDucks[i].pos.y);
+
+        if (Duck_sEyeZone < DucksAttracttionToEachOther)
+            return true;
+        }
+
+
+    return false;
+    }
 //-----------------------------------------------------------------------------
 void IsInFlockWrapper (Hero TheDucks [], int ArrayDucksNum)
     {
     for (int ADuck = 0; ADuck < ArrayDucksNum; ADuck++)
         {
-        TheDucks[ADuck].InFlock = IsInFlock (TheDucks, ArrayDucksNum, ADuck);
+        TheDucks[ADuck].InFlock = IsInFlock (TheDucks, ArrayDucksNum, ADuck, 100);
         }
 
     }
@@ -301,9 +325,8 @@ void IsInFlockWrapper (Hero TheDucks [], int ArrayDucksNum)
 //-----------------------------------------------------------------------------
 Vector AngryDuckMode (Hero *object, Hero *AngryDuck)
     {
-    double VectorLength = Gipotenooza (object->pos.x, object->pos.y, AngryDuck->pos.x, AngryDuck->pos.y);
-    Vector ChasingForce = {(object->pos.x - AngryDuck->pos.x)/VectorLength * 100,
-                           (object->pos.y - AngryDuck->pos.y)/VectorLength * 100};
+    Vector ChasingForce = {(object->pos.x - AngryDuck->pos.x)/150,
+                           (object->pos.y - AngryDuck->pos.y)/150};
     return ChasingForce;
     }
 //=============================================================================
@@ -464,6 +487,10 @@ void SuperAnimation (const Hero *object, int Active)
     txAlphaBlend (txDC (), object->pos.x - object->XLen/2, object->pos.y - object->YLen/2,
                       object->XLen, object->YLen, object->Texture,
                       object->XLen * Active, object->YLen * ActiveMirror);
+
+    txSetFillColor ((object->InFlock)? TX_GREEN : TX_RED);
+
+    txCircle (object->pos.x, object->pos.y, 20);
     }
 //-----------------------------------------------------------------------------
 
@@ -519,10 +546,19 @@ void StartCom ()
     txSetColor         (RGB(0, 0, 0));
 
     txBegin ();
-    //txDisableAutoPause();
+    txDisableAutoPause();
     }
 //-----------------------------------------------------------------------------
 
 //}
 //-----------------------------------------------------------------------------
+
+void PlsStopSpammingKeysGetYourHandsAwayFromTheKeyBoard_Arrrrrrrr ()
+    {
+    while (GetAsyncKeyState ('A') || GetAsyncKeyState ('S') || GetAsyncKeyState ('W') || GetAsyncKeyState ('D'))
+        Sleep (0);
+
+    }
+
+
 
