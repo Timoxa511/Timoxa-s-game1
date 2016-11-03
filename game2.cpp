@@ -1,7 +1,7 @@
 #include "TXlib.h"
 
-
-
+#define that
+#define ever (;;)
 
 //{    прототипы
 
@@ -20,6 +20,7 @@ struct Hero
     int YLen;
 
     HDC Texture;
+    int AnimationNumber;
 
     int Type;
     bool InFlock;
@@ -45,7 +46,12 @@ struct Rect
     Vector B;
     };
 
-
+struct Button
+    {
+    Rect pos;
+    Vector Len;
+    HDC Texture;
+    };
 
 enum {LOSE, WIN, CONTINUE};
 
@@ -55,7 +61,7 @@ const COLORREF MAP_FILLINGPOINT = RGB (255, 255, 0);
 
 const double DT = 1;
 
-const int LIFE  = 1;
+const int LIFE  = 7;
 
 const int FlockSize = 22;
 
@@ -75,12 +81,17 @@ void HeroDraw       (const Hero *object, int radius);
 bool InsideSquareArea   (const Hero *object, const Rect *Square);
 bool ClrGreenTest (const COLORREF *Clr);
 
+void DrawButton (const Button *TheButton);
+bool InsideButton (const Hero *Mouse, const Button *TheButton);
 
 void CreateFlock (Hero TheDucks [], int start, int end, Vector pos, Vector v);
 void FlockMove   (Hero TheDucks [], int Size, int t, Hero *LosharikHero);
-bool FlockLogic  (Hero object, Hero TheDucks [], int Size, double VarOfTheDistanceBetweenTheDuckAndTheHeroObject);
+//void AngryDuckAnimation (const Hero *object, int Active, HDC AngryDuckTexture);
+bool AnyDuckOfAFlockHasBumpedTheHero  (Hero object, Hero TheDucks [], int Size, double VarOfTheDistanceBetweenTheDuckAndTheHeroObject);
 bool IsInFlock        (Hero TheDucks [], int ArrayDucksNum, int ADuck, double DucksAttracttionToEachOther);
 void IsInFlockWrapper (Hero TheDucks [], int ArrayDucksNum);
+void DuckLogic (Hero TheDucks [], int ArrayDucksNum);
+
 
 void FillingProc   (Hero *object);
 void HitPointsDraw (Hero object, int x, int y);
@@ -96,29 +107,61 @@ void MidPower        (Hero *object, const Rect *Square1, const Rect *Square2, He
 Vector AngryDuckMode (Hero *object, Hero *AngryDuck);
 
 void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik, HDC SharpBird);
-
+int  GameMenu    (HDC ButtonTexture);
 //}
 
 int main()
     {
     StartCom ();
 
+    HDC  ButtonTexture   = SuperLoadImage ("Button.bmp");
     HDC  SharpBird       = SuperLoadImage ("SharpBird.bmp");
     HDC  Losharik        = SuperLoadImage ("Sharik.bmp");
     HDC  FrontFonTexture = SuperLoadImage ("GameFon.bmp");
     HDC  BackFonTexture  = SuperLoadImage ("GameBackFon.bmp");
 
-    GameProcces (FrontFonTexture, BackFonTexture, Losharik, SharpBird);
+    if (GameMenu    (ButtonTexture) == 1)
+        GameProcces (FrontFonTexture, BackFonTexture, Losharik, SharpBird);
 
     txDeleteDC (FrontFonTexture);
     txDeleteDC (Losharik);
     txDeleteDC (BackFonTexture);
     txDeleteDC (SharpBird);
+    txDeleteDC (ButtonTexture);
 
     txEnd ();
     PlsStopSpammingKeysGetYourHandsAwayFromTheKeyBoard_Arrrrrrrr ();
     }
 
+//-----------------------------------------------------------------------------
+int GameMenu (HDC ButtonTexture)
+    {
+    txSetFillColor (TX_WHITE);
+    txRectangle (0, 0, txGetExtentX(), txGetExtentY());
+    Button TheButton = {{{txGetExtentX()/2 - 100, txGetExtentY()/2 - 100},
+                         {txGetExtentX()/2 + 100, txGetExtentY()/2 + 100}}, {200, 200}, ButtonTexture};
+    for ever
+        {
+        Hero Mouse  = {true, txMouseX (), txMouseY ()};
+        if (InsideButton (&Mouse, &TheButton)) return 1;
+        txSleep (0);
+        }
+    return 0;
+    }
+
+//-----------------------------------------------------------------------------
+bool InsideButton (const Hero *Mouse, const Button *TheButton)
+    {
+    DrawButton (TheButton);
+    return (InsideSquareArea (Mouse, &TheButton->pos) && txMouseButtons () == 1);
+    }
+
+//-----------------------------------------------------------------------------
+void DrawButton (const Button *TheButton)
+    {
+    //Win32::RoundRect (txDC(), ButtonArea.A.x, ButtonArea.A.y, ButtonArea.B.x, ButtonArea.B.y, 70, 70);
+    txBitBlt (txDC (), TheButton->pos.A.x, TheButton->pos.A.y, TheButton->Len.x, TheButton->Len.y, TheButton->Texture);
+    }
 //-----------------------------------------------------------------------------
 void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik, HDC SharpBird)
     {
@@ -128,9 +171,9 @@ void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik, HDC Sha
     Fon FrontFon = {{1800/2, 1000/2}, FrontFonTexture, 1800, 1000};
     Fon BackFon  = {{1800/2, 1000/2}, BackFonTexture,  1800, 1000};
 
-    Hero LosharikHero = {true, {900, 850},  {0, 0}, 110,  80, Losharik, CHARACTER, false, 100, LIFE};
+    Hero LosharikHero = {true, {900, 850},  {0, 0}, 110,  80, Losharik, 0, CHARACTER, false, 100, LIFE};
 
-    Hero TheDucks[FlockSize] = { {true, { }, { }, 114, 85, SharpBird, NPC} };
+    Hero TheDucks[FlockSize] = { {true, { }, { }, 114, 85, SharpBird, 0, NPC} };
     CreateFlock (TheDucks, 0,           FlockSize/2, {400, 400}, {5, -1.5});
     CreateFlock (TheDucks, FlockSize/2, FlockSize,   {400, 400}, {3, 3.5 });
 
@@ -157,8 +200,9 @@ void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik, HDC Sha
 
 
 
-        if (FlockLogic (LosharikHero, TheDucks, FlockSize, 50) == false) LosharikHero.Life -=1;
+        if (AnyDuckOfAFlockHasBumpedTheHero (LosharikHero, TheDucks, FlockSize, 50) == false) LosharikHero.Life -=1;
         IsInFlockWrapper (TheDucks, FlockSize);
+        DuckLogic (TheDucks, FlockSize);
         FlockMove   (TheDucks, FlockSize, t, &LosharikHero);
 
 
@@ -262,12 +306,15 @@ void FlockMove (Hero TheDucks [], int Size, int t, Hero *LosharikHero)
         {
         assert (0 <= i && i < Size);
         GamePhysics (&TheDucks [i], DT, NULL, NULL, LosharikHero);
-        if (TheDucks[i].Active) SuperAnimation (&TheDucks [i], t/3%3); //else txCircle (TheDucks[i].pos.x, TheDucks[i].pos.y, 2);
+        if (TheDucks[i].Active) SuperAnimation (&TheDucks [i], (TheDucks[i].InFlock)? t/3%3 : t
+
+
+        %3); //else txCircle (TheDucks[i].pos.x, TheDucks[i].pos.y, 2);
         }
     }
 
 //-----------------------------------------------------------------------------
-bool FlockLogic (Hero object, Hero TheDucks [], int Size, double VarOfTheDistanceBetweenTheDuckAndTheHeroObject)
+bool AnyDuckOfAFlockHasBumpedTheHero (Hero object, Hero TheDucks [], int Size, double VarOfTheDistanceBetweenTheDuckAndTheHeroObject)
     {
     for (int i = 0; i < Size; i++)
         {
@@ -325,11 +372,33 @@ void IsInFlockWrapper (Hero TheDucks [], int ArrayDucksNum)
 //-----------------------------------------------------------------------------
 Vector AngryDuckMode (Hero *object, Hero *AngryDuck)
     {
+
+
     Vector ChasingForce = {(object->pos.x - AngryDuck->pos.x)/150,
                            (object->pos.y - AngryDuck->pos.y)/150};
     return ChasingForce;
     }
+
+//-----------------------------------------------------------------------------
+/*void AngryDuckAnimation (const Hero *object, int Active, HDC AngryDuckTexture)
+    {
+    if (object->InFlock == true)
+        {
+        SuperAnimation (object, Active);
+        }
+    else
+        {
+        int ActiveMirror = that (object->v.x >= 0); // равно тому факту, что vx > 0. если правда то 1 если ложно то 0
+
+        txAlphaBlend (txDC (), object->pos.x - object->XLen/2, object->pos.y - object->YLen/2,
+                          object->XLen, object->YLen, AngryDuckTexture,
+                          object->XLen * Active, object->YLen * ActiveMirror);
+        }
+    }
+
 //=============================================================================
+ */
+
 
 void HitPointsDraw (Hero object, int x, int y)
         {
@@ -388,6 +457,18 @@ void FillingProc (Hero *object)
     if (object->FuelAmount < 100) object->FuelAmount += 1;
     }
 
+
+//-----------------------------------------------------------------------------
+void DuckLogic (Hero TheDucks [], int ArrayDucksNum)
+    {
+    for (int i = 0; i < ArrayDucksNum; i++)
+        {
+        TheDucks[i].AnimationNumber = (TheDucks[i].InFlock)? 0 : 1;
+        }
+
+
+    //default: printf ("обнаружен обьект, неизвестной природы %d, в целях безопасности ваш диск будет отформатирован", object->Type); abort ();
+    }
 //--------------------------------------------------------------------
 void GamePhysics (Hero *object , double dt, const Rect *Square1, const Rect *Square2, Hero *LosharikHero)
     {
@@ -486,11 +567,11 @@ void SuperAnimation (const Hero *object, int Active)
 
     txAlphaBlend (txDC (), object->pos.x - object->XLen/2, object->pos.y - object->YLen/2,
                       object->XLen, object->YLen, object->Texture,
-                      object->XLen * Active, object->YLen * ActiveMirror);
+                      object->XLen * Active, object->YLen *(object->AnimationNumber * 2 + ActiveMirror));
 
     txSetFillColor ((object->InFlock)? TX_GREEN : TX_RED);
 
-    txCircle (object->pos.x, object->pos.y, 20);
+    //txCircle (object->pos.x, object->pos.y, 20);
     }
 //-----------------------------------------------------------------------------
 
