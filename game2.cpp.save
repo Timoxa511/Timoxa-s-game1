@@ -61,7 +61,7 @@ const COLORREF MAP_FILLINGPOINT = RGB (255, 255, 0);
 
 const double DT = 1;
 
-const int LIFE  = 7;
+const int LIFE  = 45;
 
 const int FlockSize = 22;
 
@@ -81,7 +81,7 @@ void HeroDraw       (const Hero *object, int radius);
 bool InsideSquareArea   (const Hero *object, const Rect *Square);
 bool ClrGreenTest (const COLORREF *Clr);
 
-void DrawButton (Rect ButtonArea);
+void DrawButton (const Button *TheButton);
 bool InsideButton (const Hero *Mouse, const Button *TheButton);
 
 void CreateFlock (Hero TheDucks [], int start, int end, Vector pos, Vector v);
@@ -100,12 +100,15 @@ void GamePhysics   (Hero *object, double dt, const Rect *Square1 = NULL, const R
 void ObjectControl (Hero *object,
                     int KeyUp = 'W', int KeyDown = 'S', int KeyLeft = 'A', int KeyRight = 'D',
                     int KeyStopMove = VK_SPACE);
+bool GameControl (int KeyQuitAndPause);
+
 
 bool ClrCenter (Hero *object, COLORREF PointClr, COLORREF PrevClr);
-
 void MidPower        (Hero *object, const Rect *Square1, const Rect *Square2, Hero *LosharikHero);
 Vector AngryDuckMode (Hero *object, Hero *AngryDuck);
 
+void LoadData (const char FileName [], Hero *LosharikHero, Hero TheDucks [], int  nDucks);
+void SaveData (const char FileName [], const Hero *LosharikHero, const Hero TheDucks [], int  nDucks);
 void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik, HDC SharpBird);
 int  GameMenu    (HDC ButtonTexture);
 //}
@@ -149,21 +152,22 @@ int GameMenu (HDC ButtonTexture)
     return 0;
     }
 
-//-----------------------------------------------------------------------------
+//{-----------------------------------------------------------------------------
 bool InsideButton (const Hero *Mouse, const Button *TheButton)
     {
-    DrawButton (TheButton->pos);
+    DrawButton (TheButton);
     return (InsideSquareArea (Mouse, &TheButton->pos) && txMouseButtons () == 1);
     }
 
 //-----------------------------------------------------------------------------
-void DrawButton (Rect ButtonArea)
+void DrawButton (const Button *TheButton)
     {
     //Win32::RoundRect (txDC(), ButtonArea.A.x, ButtonArea.A.y, ButtonArea.B.x, ButtonArea.B.y, 70, 70);
-    BitBlt (txDC (), ButtonArea->pos.x - ButtonArea->Len.x/2, ButtonArea->pos.y - ButtonArea->Len.y/2,
-            ButtonArea-Len.x, ButtonArea->Len.y, ButtonArea->Texture);
+    txBitBlt (txDC (), TheButton->pos.A.x, TheButton->pos.A.y, TheButton->Len.x, TheButton->Len.y, TheButton->Texture);
     }
+//}
 //-----------------------------------------------------------------------------
+
 void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik, HDC SharpBird)
     {
     Rect Square1 = {{1050, 0}, {1800, 500}};
@@ -185,6 +189,11 @@ void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik, HDC Sha
     COLORREF PrevClr = -1;
     //int Time1 = GetTickCount ();
     int t = 0;
+
+
+    LoadData ("dataSharikGame.Andrusha", &LosharikHero, TheDucks, FlockSize);
+    //SaveData ("datasharikgame2", &LosharikHero, TheDucks, FlockSize);
+    unlink ("dataSharikGame.Andrusha");
 
     while (!GetAsyncKeyState (VK_ESCAPE))
         {
@@ -214,11 +223,69 @@ void GameProcces (HDC FrontFonTexture, HDC BackFonTexture, HDC Losharik, HDC Sha
         //int Time2 = GetTickCount ();
         //printf ("         время %d        \r", Time2 - Time1);
 
+        if (GameControl (VK_RETURN))
+            {
+            SaveData ("dataSharikGame.Andrusha", &LosharikHero, TheDucks, FlockSize);
+            break;
+            }
+
         txSleep (20);
         t++;
         }
+
     }
 
+//-----------------------------------------------------------------------------
+
+void SaveData (const char FileName [], const Hero *LosharikHero, const Hero TheDucks [], int  nDucks)
+    {
+    FILE* SaveF = fopen (FileName, "w");
+    fprintf (SaveF, "LosharikHero { Vector pos: %.1lf %.1lf; Vector v: %.2lf %.2lf; AnimationNumber: %d; FuelAmount: %lf; Life: %d }\n",
+                     LosharikHero->pos.x,  LosharikHero->pos.y, LosharikHero->v.x, LosharikHero->v.y,  LosharikHero->AnimationNumber,
+                     LosharikHero->FuelAmount, LosharikHero->Life);
+
+    for (int i = 0; i < nDucks; i++)
+        {
+        fprintf (SaveF, "TheDucks [%2d] { Active: %d; Vector pos: %6.1lf %6.1lf; Vector v: %5.2lf %5.2lf; AnimationNumber: %d; InFlock: %d; Life: %2d }\n",
+                     i, TheDucks[i].Active, TheDucks[i].pos.x, TheDucks[i].pos.y, TheDucks[i].v.x, TheDucks[i].v.y, TheDucks[i].AnimationNumber,
+                     TheDucks[i].InFlock, TheDucks[i].Life);
+        txSleep (0);
+        }
+
+    fclose (SaveF);
+    }
+
+//-----------------------------------------------------------------------------
+
+void LoadData (const char FileName [], Hero *LosharikHero, Hero TheDucks [], int  nDucks)
+    {
+    FILE* SaveF = fopen (FileName, "r");
+    int jet = fscanf (SaveF, "LosharikHero { Vector pos: %lg %lg; Vector v: %lg %lg; AnimationNumber: %d; FuelAmount: %lg; Life: %d }",
+                     &LosharikHero->pos.x,  &LosharikHero->pos.y, &LosharikHero->v.x, &LosharikHero->v.y,  &LosharikHero->AnimationNumber,
+                     &LosharikHero->FuelAmount, &LosharikHero->Life);
+    //printf ("jet = %d\n\n", jet);
+    //assert (jet == 7);
+
+    for (int i = 0; i < nDucks; i++)
+        {
+        int Active  = TheDucks[i].Active;
+        int InFlock = TheDucks[i].InFlock;
+
+        int fghjk = fscanf (SaveF, " TheDucks [%*d] { Active: %d; Vector pos: %lg %lg; Vector v: %lg %lg; AnimationNumber: %d; InFlock: %d; Life: %d }",
+                        &Active, &TheDucks[i].pos.x, &TheDucks[i].pos.y, &TheDucks[i].v.x, &TheDucks[i].v.y,
+                        &TheDucks[i].AnimationNumber, &InFlock, &TheDucks[i].Life);
+                        // %*d значит что прочитать целое(d) число, * значит что мы его не запоминем, а выбрасываем в космос)))
+
+        //printf ("i = %d fghjk = %d\n",i , fghjk);
+        //assert (fghjk == 8);
+
+        TheDucks[i].Active  = (bool) Active;
+        TheDucks[i].InFlock = (bool) InFlock;
+        txSleep (0);
+        }
+
+    fclose (SaveF);
+    }
 //-----------------------------------------------------------------------------
 bool ClrCenter (Hero *object, COLORREF PointClr, COLORREF PrevClr)
     {
@@ -239,7 +306,6 @@ void MidPower (Hero *object, const Rect *Square1, const Rect *Square2, Hero *Los
         resF.x += -0.3;
         resF.y +=  0.2;
         }
-
     if (object->Type != NPC)
         if (Square1 != NULL && Square2 != NULL)  // if (Square1 && Square2) если имеет смысл
             if (InsideSquareArea (object, Square1)  ||
@@ -401,12 +467,23 @@ Vector AngryDuckMode (Hero *object, Hero *AngryDuck)
  */
 
 
-void HitPointsDraw (Hero object, int x, int y)
+void HitPointsDraw (Hero object, int x, int y)                 
         {
+        for (int i = 0; i < object.Life; i++)
+            {
+            Fon LifeBallon = {x + i%10 * object.XLen, y + i/10*o, object.Texture, object.XLen, object.YLen};
+            FonDraw (&LifeBallon);
+            }
+        
+        
         while (object.Life > 0)
             {
-            Fon LifeBallon = {x + object.Life*110.0, (double) y, object.Texture, 110, 80};
-            FonDraw (&LifeBallon);
+            Fon LifeBallon = {};Fon LifeBallon = {};
+            if ( (x + (double) object.Life*object.XLen) < 1700)
+                LifeBallon      = {x + (double) object.Life*object.XLen, (double) y, object.Texture, object.XLen, object.YLen};
+                else LifeBallon = {x + (double) object.Life*object.XLen, (double) y * (int) ((x + object.Life*object.XLen) / 1700),
+                                                                                         object.Texture, object.XLen, object.YLen};
+            
             object.Life --;
             }
             /*if ((x + object.Life*110.0) > 1800)
@@ -540,6 +617,11 @@ void ObjectControl (Hero *object, int KeyUp, int KeyDown, int KeyLeft, int KeyRi
         object->v.x = object->v.y = 0;
     }
 
+//-----------------------------------------------------------------------------
+bool GameControl (int KeyQuitAndPause)
+    {
+    return (GetAsyncKeyState (KeyQuitAndPause));
+    }
 //-----------------------------------------------------------------------------
 bool ClrGreenTest (const COLORREF *Clr)
     {
